@@ -2,15 +2,43 @@ xsdParser = require './xsdParser'
 
 module.exports =
   types: {}
-
+  knownXsd: []
 
   ## Clear the data. This is the case of changing the XSD.
   clear: ->
     @types = {}
+    @knownXsd = []
+    xsdParser.clear()
 
 
   ## Load a new XSD.
   load: (xmlPath, xsdUri, complete) ->
+    @loadRecursive xmlPath, xsdUri, () =>
+      xsdParser.postParsing()
+      @types = xsdParser.types
+      complete()
+
+  loadRecursive: (xmlPath, xsdUri, complete) ->
+    processIncludes = () =>
+      # Find the next included Xsd to parse.
+      loop
+        schemaPath = xsdParser.includes.shift()
+        break if schemaPath not in @knownXsd
+
+      # Recursive end condition: no more Xsd to include
+      if not schemaPath?
+        complete()
+        return
+
+      @knownXsd.push schemaPath
+      # Included schema is absolute
+      if schemaPath.substr(0,4) is "http" or schemaPath[0] is '/' or schemaPath.substr(1, 2) is ':\\'
+        @loadRecursive xmlPath, schemaPath, complete
+
+      # Included schema is relative to parent schema.
+      base = xsdUri.substr 0, xsdUri.lastIndexOf('/') + 1
+      @loadRecursive xmlPath, base + schemaPath, complete
+
     # Get the protocol used to download the file.
     protocol = null
     if xsdUri.substr(0, 7) is "http://"
@@ -27,7 +55,7 @@ module.exports =
 
         # On complete, parse XSD
         res.on 'end', =>
-          @parseFromString(body, complete)
+          @parseFromString(body, processIncludes)
       ).on 'error', (e) ->
         console.error e
     else
@@ -41,15 +69,14 @@ module.exports =
       # Read the file from disk
       fs = require 'fs'
       fs.readFile path.join(basePath, xsdUri), (err, data) =>
-        if err then console.error err else @parseFromString(data, complete)
+        if err then console.error err else @parseFromString(data, processIncludes)
 
 
   ## Parse the the XML
-  parseFromString: (data, complete) ->
-    @types = xsdParser.types
+  parseFromString: (data, processIncludes) ->
     xsdParser.parseFromString data
-    complete()
-
+    # "Recursive" processing of all the schema include and sub-include
+    processIncludes()
 
   ## Called when suggestion requested. Get all the possible node children.
   getChildren: (xpath) ->

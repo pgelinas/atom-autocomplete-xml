@@ -33,6 +33,13 @@ module.exports =
   types: {}
   roots: {}
   attributeGroups: {}
+  includes: []
+
+  clear: ()->
+    @types = {}
+    @roots = {}
+    @attributeGroups = {}
+    @includes = []
 
   parseFromString: (xmlString, complete) ->
     xml2js = require 'xml2js'
@@ -67,7 +74,7 @@ module.exports =
     @parseType node for node in xml.$$
 
     # Process the root node (Element type).
-    @parseRoot node for node in xml.element
+    @parseRoot node for node in (xml.element ? [])
 
     # Copy root types into types since they could be used too.
     @types[name] = value for name, value of @roots
@@ -75,9 +82,10 @@ module.exports =
     # Process all AttributeGroup (not regular types).
     @parseAttributeGroup node for node in (xml.attributeGroup ? [])
 
-    # Post parse the nodes and resolve links.
-    @postParsing()
-
+    # Process XSD including other XSD.
+    for node in (xml.include ? [])
+      console.log "Found included schema " + node.$["schemaLocation"]
+      @includes.push node.$["schemaLocation"]
 
   ## Parse a node type.
   parseType: (node, typeName) ->
@@ -301,7 +309,6 @@ module.exports =
 
     @roots[rootTagName] = root
     return root
-
 
   ## This takes place after all nodes have been parse. Allow resolve links.
   postParsing: ->
