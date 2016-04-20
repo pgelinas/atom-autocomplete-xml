@@ -336,6 +336,7 @@ module.exports =
 
         # Copy the children
         linkType = @types[groupType.$.ref]
+
         type.xsdChildren = linkType.xsdChildren
         type.xsdChildrenMode = linkType.xsdChildrenMode
 
@@ -350,11 +351,7 @@ module.exports =
       # At the moment, I think it only makes sense if it replaces all the
       # elements. Consider a group that contains a sequence of choice elements.
       # We don't support sequence->sequence(from group)->choide->elements.
-      for group in type.xsdChildren
-        if group.childType is 'group'
-          linkType = @types[group.ref]
-          type.xsdChildren = linkType.xsdChildren
-          break
+      type.xsdChildren = @dereferenceChildren type.xsdChildren
 
       # Add the attributes from the group attributes
       groups = (attr.ref for attr in type.xsdAttributes when attr.ref)
@@ -365,3 +362,13 @@ module.exports =
         else
           attributes.push attr
       type.xsdAttributes = attributes
+
+  dereferenceChildren: (xsdChildren) ->
+    newChildren = []
+    for children in xsdChildren
+      if children.childType is 'group'
+        linkType = @types[children.ref]
+        newChildren.push child for child in @dereferenceChildren linkType.xsdChildren when child not in newChildren
+      else
+        newChildren.push children
+    return newChildren
